@@ -1,28 +1,35 @@
-import re
+import requests
+import hashlib
+import sys
 
-while True:
-    # asking password from the user
-    password = input('Please enter the password: ')
+def request_api_data(query_char):
+  url = 'https://api.pwnedpasswords.com/range/' + query_char
+  res = requests.get(url)
+  if res.status_code != 200:
+    raise RuntimeError(f'Error fetching: {res.status_code}, check the api and try again')
+  return res
 
-    # defining the pattern and checking if at least 8 characters in the password.
-    atleast_eight_pattern = r"[a-zA-Z0-9_%#@\.\+\$]{8,}"
-    atleast_eight = re.search(atleast_eight_pattern, password)
+def get_password_leaks_count(hashes, hash_to_check):
+  hashes = (line.split(':') for line in hashes.text.splitlines())
+  for h, count in hashes:
+    if h == hash_to_check:
+      return count
+  return 0
 
-    # defining the pattern and checking if there is a digit at the end of the password.
-    end_with_digit_pattern = r"\d$"
-    end_with_digit = re.search(end_with_digit_pattern, password)
+def pwned_api_check(password):
+  sha1password = hashlib.sha1(password.encode('utf-8')).hexdigest().upper()
+  first5_char, tail = sha1password[:5], sha1password[5:]
+  response = request_api_data(first5_char)
+  return get_password_leaks_count(response, tail)
 
-    if atleast_eight and end_with_digit:
-        # checking if the password is at least 8 characters and ends with a digit entering the password.
-        print('Password entered successfully.')
-        break
-    elif atleast_eight and not end_with_digit:
-        # asking the user to input password again in case of the password not ending with digits.
-        print('The password must contain digit at the end.')
-    elif not atleast_eight and end_with_digit:
-        # asking the user to input password again in case of the password not being 8 characters.
-        print('The password must contain at least 8 characters.')
+def main(args):
+  for password in args:
+    count = pwned_api_check(password)
+    if count:
+      print(f'{password} was found {count} times... you should probably change your password!')
     else:
-        # asking the user to input password again in case of the password not being 8 characters and not ending with
-        # digits.
-        print('Please enter at least 8 characters and a digit at the end of the password.')
+      print(f'{password} was NOT found. Carry on!')
+  return 'done!'
+
+if __name__ == '__main__':
+  sys.exit(main(sys.argv[1:]))
